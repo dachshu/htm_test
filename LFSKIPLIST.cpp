@@ -34,40 +34,40 @@ class LFSKNode;
 
 bool Marked(LFSKNode* curr)
 {
-	int add = reinterpret_cast<int> (curr);
+	long long add = reinterpret_cast<long long> (curr);
 	return ((add & 0x1) == 0x1);
 }
 
 LFSKNode* GetReference(LFSKNode* curr)
 {
-	int addr = reinterpret_cast<int> (curr);
-	return reinterpret_cast<LFSKNode*>(addr & 0xFFFFFFFE);
+	long long addr = reinterpret_cast<long long> (curr);
+	return reinterpret_cast<LFSKNode*>(addr & 0xFFFFFFFFFFFFFFFE);
 }
 
 LFSKNode* Get(LFSKNode* curr, bool* marked)
 {
-	int addr = reinterpret_cast<int> (curr);
+	long long addr = reinterpret_cast<long long> (curr);
 	*marked = ((addr & 0x01) != 0);
-	return reinterpret_cast<LFSKNode*>(addr & 0xFFFFFFFE);
+	return reinterpret_cast<LFSKNode*>(addr & 0xFFFFFFFFFFFFFFFE);
 }
 
 LFSKNode* AtomicMarkableReference(LFSKNode* node, bool mark)
 {
-	int addr = reinterpret_cast<int>(node);
+	long long addr = reinterpret_cast<long long>(node);
 	if (mark)
 		addr = addr | 0x1;
 	else
-		addr = addr & 0xFFFFFFFE;
+		addr = addr & 0xFFFFFFFFFFFFFFFE;
 	return reinterpret_cast<LFSKNode*>(addr);
 }
 
 LFSKNode* Set(LFSKNode* node, bool mark)
 {
-	int addr = reinterpret_cast<int>(node);
+	long long addr = reinterpret_cast<long long>(node);
 	if (mark)
 		addr = addr | 0x1;
 	else
-		addr = addr & 0xFFFFFFFE;
+		addr = addr & 0xFFFFFFFFFFFFFFFE;
 	return reinterpret_cast<LFSKNode*>(addr);
 }
 
@@ -119,13 +119,13 @@ public:
 	}
 
 	bool CompareAndSet(int level, LFSKNode* old_node, LFSKNode* next_node, bool old_mark, bool next_mark) {
-		int old_addr = reinterpret_cast<int>(old_node);
+		long long old_addr = reinterpret_cast<long long>(old_node);
 		if (old_mark) old_addr = old_addr | 0x1;
-		else old_addr = old_addr & 0xFFFFFFFE;
-		int next_addr = reinterpret_cast<int>(next_node);
+		else old_addr = old_addr & 0xFFFFFFFFFFFFFFFE;
+		long long next_addr = reinterpret_cast<long long>(next_node);
 		if (next_mark) next_addr = next_addr | 0x1;
-		else next_addr = next_addr & 0xFFFFFFFE;
-		return atomic_compare_exchange_strong(reinterpret_cast<atomic_int*>(&next[level]), &old_addr, next_addr);
+		else next_addr = next_addr & 0xFFFFFFFFFFFFFFFE;
+		return atomic_compare_exchange_strong(reinterpret_cast<atomic_llong*>(&next[level]), &old_addr, next_addr);
 		//int prev_addr = InterlockedCompareExchange(reinterpret_cast<long *>(&next[level]), next_addr, old_addr);
 		//return (prev_addr == old_addr);
 	}
@@ -377,5 +377,4 @@ int main()
 		cout << num_thread << " Threads,  Time = ";
 		cout << duration_cast<milliseconds>(du).count() << " ms\n";
 	}
-	system("pause");
 }

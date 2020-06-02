@@ -288,5 +288,4 @@ int main()
 		cout << num_thread << " Threads,  Time = ";
 		cout << duration_cast<milliseconds>(du).count() << " ms\n";
 	}
-	system("pause");
 }
