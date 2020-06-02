@@ -89,7 +89,7 @@ class SKNode
 {
 public:
     int key;
-    SKNode* next[MAX_LEVEL];
+    volatile SKNode* next[MAX_LEVEL];
     int topLevel;
     volatile bool deleted{ false };
 
@@ -147,9 +147,9 @@ public:
 
     void Init()
     {
-        SKNode* curr = head->next[0];
+        volatile SKNode* curr = head->next[0];
         while (curr != tail) {
-			SKNode* temp = curr;
+			volatile SKNode* temp = curr;
 			curr = curr->next[0];
 			delete temp;
 		}
@@ -160,7 +160,7 @@ public:
 
     void Dump()
 	{
-		SKNode* curr = head;
+		volatile SKNode* curr = head;
 		printf("First 20 entries are : ");
 		for (int i = 0; i < 20; ++i) {
 			curr = curr->next[0];
@@ -190,7 +190,7 @@ public:
         return true;
     }
 
-    void Find(int key, SKNode* preds[MAX_LEVEL], SKNode* currs[MAX_LEVEL])
+    void Find(int key, SKNode volatile* preds[MAX_LEVEL], SKNode volatile* currs[MAX_LEVEL])
 	{
 		int cl = MAX_LEVEL - 1;
 		while (true) {
@@ -318,8 +318,8 @@ public:
 
     bool Contains(int x)
     {
-        SKNode* pred = head;
-		SKNode* curr = NULL;
+        volatile SKNode* pred = head;
+		volatile SKNode* curr = NULL;
         for (int level = MAX_LEVEL - 1; level >= 0; --level){
             curr = pred->next[level];
             while (true)
