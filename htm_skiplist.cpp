@@ -299,7 +299,7 @@ public:
                 }
 
                 succs[0]->deleted = true;
-                for(int l = 0; l < succs[0]->topLevel; ++l)
+                for(int l = 0; l <= succs[0]->topLevel; ++l)
                 {
                     preds[l]->next[l] = succs[0]->next[l];
                 }
