@@ -174,8 +174,8 @@ public:
     {
         lock_guard<mutex> lg(glock);
         
-        SKNode* preds[MAX_LEVEL];
-        SKNode* succs[MAX_LEVEL];
+        volatile SKNode* preds[MAX_LEVEL];
+        volatile SKNode* succs[MAX_LEVEL];
         Find(newNode->key, preds, succs);
         
         if(succs[0]->key == newNode->key) return false;
@@ -190,7 +190,7 @@ public:
         return true;
     }
 
-    void Find(int key, SKNode volatile* preds[MAX_LEVEL], SKNode volatile* currs[MAX_LEVEL])
+    void Find(int key, volatile SKNode* preds[MAX_LEVEL], volatile SKNode* currs[MAX_LEVEL])
 	{
 		int cl = MAX_LEVEL - 1;
 		while (true) {
@@ -219,8 +219,8 @@ public:
         SKNode* newNode = new SKNode;
         newNode->InitNode(x, topLevel);
 
-        SKNode* preds[MAX_LEVEL];
-        SKNode* succs[MAX_LEVEL];
+        volatile SKNode* preds[MAX_LEVEL];
+        volatile SKNode* succs[MAX_LEVEL];
 
         int retry = -1;
         
@@ -268,8 +268,8 @@ public:
 
     bool Remove(int x)
     {
-        SKNode* preds[MAX_LEVEL];
-        SKNode* succs[MAX_LEVEL];
+        volatile SKNode* preds[MAX_LEVEL];
+        volatile SKNode* succs[MAX_LEVEL];
 
         int retry = -1;
     start_from_scratch_d:
