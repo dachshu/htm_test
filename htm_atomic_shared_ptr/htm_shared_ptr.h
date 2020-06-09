@@ -47,7 +47,7 @@ public:
                 ++num_tx_abort_rest;
 	        }
         }
-        
+        shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
 	}
@@ -111,6 +111,7 @@ public:
 	shared_ptr<T> operator=(shared_ptr<T> sptr) noexcept
 	{
 		while (_XBEGIN_STARTED != _xbegin());
+        shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
 		return sptr;
