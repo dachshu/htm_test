@@ -159,7 +159,7 @@
 		bool compare_exchange_strong(weak_ptr<T>& expected_wptr, weak_ptr<T> new_wptr, memory_order mem_order) noexcept
 		{
 			bool success = false;
-			lock_guard(m_lock);
+			lock_guard<mutext> lg(m_lock);
 
 			weak_ptr<T> t = m_ptr;
 			shared_ptr<T> my_ptr = t.lock();
