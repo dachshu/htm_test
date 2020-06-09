@@ -32,7 +32,7 @@ public:
 	
             status = _xbegin();
             if (_XBEGIN_STARTED == (unsigned)status) {
-                return break;
+                break;
             }
             cout << "!";
             ++num_tx_aborts;
