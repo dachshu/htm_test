@@ -687,48 +687,48 @@ public:
 class LFNODE;
 class MPTR
 {
-	int value;
+	long long value;
 public:
 	void set(LFNODE* node, bool removed)
 	{
-		value = reinterpret_cast<int>(node);
+		value = reinterpret_cast<long long>(node);
 		if (true == removed)
 			value = value | 0x01;
 		else
-			value = value & 0xFFFFFFFE;
+			value = value & 0xFFFFFFFFFFFFFFFE;
 	}
 	LFNODE* getptr()
 	{
-		return reinterpret_cast<LFNODE*>(value & 0xFFFFFFFE);
+		return reinterpret_cast<LFNODE*>(value & 0xFFFFFFFFFFFFFFFE);
 	}
 	LFNODE* getptr(bool* removed)
 	{
-		int temp = value;
+		long long temp = value;
 		if (0 == (temp & 0x1)) *removed = false;
 		else *removed = true;
-		return reinterpret_cast<LFNODE*>(temp & 0xFFFFFFFE);
+		return reinterpret_cast<LFNODE*>(temp & 0xFFFFFFFFFFFFFFFE);
 	}
 	bool CAS(LFNODE* old_node, LFNODE* new_node, bool old_removed, bool new_removed)
 	{
-		int old_value, new_value;
-		old_value = reinterpret_cast<int>(old_node);
+		long long old_value, new_value;
+		old_value = reinterpret_cast<long long>(old_node);
 		if (true == old_removed) old_value = old_value | 0x01;
-		else old_value = old_value & 0xFFFFFFFE;
-		new_value = reinterpret_cast<int>(new_node);
+		else old_value = old_value & 0xFFFFFFFFFFFFFFFE;
+		new_value = reinterpret_cast<long long>(new_node);
 		if (true == new_removed) new_value = new_value | 0x01;
-		else new_value = new_value & 0xFFFFFFFE;
+		else new_value = new_value & 0xFFFFFFFFFFFFFFFE;
 		return atomic_compare_exchange_strong(
-			reinterpret_cast<atomic_int*>(&value), &old_value, new_value);
+			reinterpret_cast<atomic_llong*>(&value), &old_value, new_value);
 	}
 	bool TryMarking(LFNODE* old_node, bool new_removed)
 	{
-		int old_value, new_value;
-		old_value = reinterpret_cast<int>(old_node);
-		old_value = old_value & 0xFFFFFFFE;
+		long long old_value, new_value;
+		old_value = reinterpret_cast<long long>(old_node);
+		old_value = old_value & 0xFFFFFFFFFFFFFFFE;
 		new_value = old_value;
 		if (true == new_removed) new_value = new_value | 0x01;
 		return atomic_compare_exchange_strong(
-			reinterpret_cast<atomic_int*>(&value), &old_value, new_value);
+			reinterpret_cast<atomic_llong*>(&value), &old_value, new_value);
 	}
 	bool IsRemoved()
 	{
@@ -1052,7 +1052,6 @@ int main()
 		cout << n << "Threads,  ";
 		cout << ",  Duration : " << duration_cast<milliseconds>(d).count() << " msecs.\n";
 	}
-	system("pause");
 }
 
 
