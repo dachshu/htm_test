@@ -25,28 +25,7 @@ public:
 
 	void store(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
-		//while (_XBEGIN_STARTED != _xbegin());
-        while (true)
-        {
-            int status = 0;
-	
-            status = _xbegin();
-            if (_XBEGIN_STARTED == (unsigned)status) {
-                break;
-            }
-            cout << "!";
-            ++num_tx_aborts;
-            if (status & _XABORT_CAPACITY) {
-                ++num_tx_abort_capacity;
-	        } else if (status & _XABORT_CONFLICT) {
-                ++num_tx_abort_confilct;
-            
-            } else if (status & _XABORT_EXPLICIT) {
-                ++num_tx_abort_explicit;
-	        } else {
-                ++num_tx_abort_rest;
-	        }
-        }
+		while (_XBEGIN_STARTED != _xbegin());
         shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
