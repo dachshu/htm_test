@@ -5,6 +5,7 @@
 #include <mutex>
 #include <vector>
 #include "htm_shared_ptr.h"
+#include "mutex_shared_ptr.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -1012,6 +1013,242 @@ public:
 	}
 };
 
+struct ASPNode {
+public:
+	int key;
+	shared_ptr<ASPNode> next;
+	mutex m_lock;
+	bool deleted{ false };
+
+	ASPNode() : next{ nullptr } {}
+	ASPNode(int key) : key{ key }, next{ nullptr } {}
+	~ASPNode() {}
+	void lock() { m_lock.lock(); }
+	void unlock() { m_lock.unlock(); }
+};
+
+class ZSet {
+	shared_ptr<ASPNode> head;
+	shared_ptr<ASPNode> tail;
+public:
+	ZSet() {
+		head = make_shared<ASPNode>(0x80000000);
+		tail = make_shared<ASPNode>(0x7fffffff);
+		head->next = tail;
+	}
+
+
+	bool add(int x) {
+		shared_ptr<ASPNode> pred;
+		shared_ptr<ASPNode> curr;
+		shared_ptr<ASPNode> e = make_shared<ASPNode>(x);
+		while (true)
+		{
+			pred = head; //
+			curr = atomic_load(&(pred->next));
+
+			while (curr->key < x) {
+				pred = curr;
+				curr = atomic_load(&(curr->next));
+			}
+			{
+				lock_guard<mutex> pl(pred->m_lock);
+				lock_guard<mutex> cl(curr->m_lock);
+				if (validate(pred, curr)) {
+					if (curr->key == x) { return false; }
+					else {
+						//auto e = new ASPNode{ x };
+						e->next = curr; //
+						atomic_store(&pred->next, e);
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	bool remove(int x) {
+		shared_ptr<ASPNode> pred;
+		shared_ptr<ASPNode> curr;
+		while (true)
+		{
+			pred = head;
+			curr = atomic_load(&(pred->next));
+
+			while (curr->key < x) {
+				pred = curr;
+				curr = atomic_load(&(curr->next));
+			}
+
+			{
+				lock_guard<mutex> pl(pred->m_lock);
+				lock_guard<mutex> cl(curr->m_lock);
+				if (validate(pred, curr))
+				{
+					if (curr->key != x) { return false; }
+					else {
+						curr->deleted = true;
+						//pred->next = curr->next;
+						atomic_store(&pred->next, curr->next);
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	bool contains(int x) {
+		shared_ptr<ASPNode> pred;
+		shared_ptr<ASPNode> curr;
+		while (true)
+		{
+			pred = head;
+			curr = atomic_load(&(pred->next));
+
+			while (curr->key < x) {
+				pred = curr;
+				curr = atomic_load(&(curr->next));
+			}
+			return curr->key == x && !curr->deleted;
+		}
+	}
+
+	void clear() {
+		while (head->next != tail) {
+			//auto temp = head.next;
+			head->next = head->next->next;
+			//delete temp;
+		}
+	}
+
+	bool validate(shared_ptr<ASPNode>& pred, shared_ptr<ASPNode>& curr) {
+		return !pred->deleted && !curr->deleted && pred->next == curr;
+	}
+
+	void dump(size_t count) {
+		auto ptr = head->next;
+		cout << count << " Result : ";
+		for (auto i = 0; i < count && ptr != tail; ++i) {
+			cout << ptr->key << " ";
+			ptr = ptr->next;
+		}
+		cout << "\n";
+	}
+};
+
+class HSPZLIST {
+	atomic_shared_ptr <SPNODE>  head, tail;
+public:
+	HSPZLIST()
+	{
+		head = make_shared<SPNODE>();
+		tail = make_shared<SPNODE>();
+		head->key = 0x80000000;
+		tail->key = 0x7FFFFFFF;
+		head->next = tail;
+	}
+	~HSPZLIST() {}
+
+	void Init()
+	{
+		head->next = tail;
+	}
+
+	void recycle_freelist()
+	{
+		return;
+	}
+
+	bool validate(shared_ptr<SPNODE>& pred, shared_ptr<SPNODE>& curr)
+	{
+		return (pred->removed == false) && (false == curr->removed) && (pred->next == curr);
+	}
+
+	bool Add(int key)
+	{
+		shared_ptr<SPNODE> pred, curr;
+
+		while (true) {
+			pred = head;
+			curr = pred->next;
+			while (curr->key < key) {
+				pred = curr; curr = curr->next;
+			}
+			pred->lock(); curr->lock();
+			if (false == validate(pred, curr)) {
+				pred->unlock();
+				curr->unlock();
+				continue;
+			}
+			if (key == curr->key) {
+				pred->unlock();
+				curr->unlock();
+				return false;
+			}
+			else {
+				shared_ptr<SPNODE> node = make_shared<SPNODE>(key);
+				node->next = curr;
+				pred->next = node;
+				pred->unlock();
+				curr->unlock();
+				return true;
+			}
+		}
+	}
+
+	bool Remove(int key)
+	{
+		shared_ptr<SPNODE> pred, curr;
+
+		while (true) {
+			pred = head;
+			curr = pred->next;
+			while (curr->key < key) {
+				pred = curr; curr = curr->next;
+			}
+			pred->lock(); curr->lock();
+			if (false == validate(pred, curr)) {
+				pred->unlock();
+				curr->unlock();
+				continue;
+			}
+			if (key == curr->key) {
+				pred->next = curr->next;
+				pred->unlock();
+				curr->unlock();
+				return true;
+			}
+			else {
+				pred->unlock();
+				curr->unlock();
+				return false;
+			}
+		}
+	}
+	bool Contains(int key)
+	{
+		shared_ptr <SPNODE> curr;
+		curr = head->next;
+		while (curr->key < key) {
+			curr = curr->next;
+		}
+		return (key == curr->key) && (false == curr->removed);
+	}
+
+	void display20()
+	{
+		int c = 20;
+		shared_ptr<SPNODE> p = head->next;
+		while (p->key != tail->key)
+		{
+			cout << p->key << ", ";
+			p = p->next;
+			c--;
+			if (c == 0) break;
+		}
+		cout << endl;
+	}
+};
 
 const auto NUM_TEST = 40000;
 const auto KEY_RANGE = 1000;
