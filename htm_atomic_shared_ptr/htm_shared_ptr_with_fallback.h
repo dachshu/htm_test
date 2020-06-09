@@ -57,6 +57,7 @@ public:
 
 	operator shared_ptr<T>() const noexcept
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -73,6 +74,7 @@ public:
 
 	shared_ptr<T> exchange(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -92,6 +94,7 @@ public:
 	bool compare_exchange_strong(shared_ptr<T>& expected_sptr, shared_ptr<T> new_sptr, memory_order, memory_order) noexcept
 	{
 		bool success = false;
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -127,6 +130,7 @@ public:
 
 	constexpr htm_shared_ptr(shared_ptr<T> sptr) noexcept
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -142,6 +146,7 @@ public:
 	//		htm_shared_ptr& operator=(const htm_shared_ptr&) = delete;
 	shared_ptr<T> operator=(shared_ptr<T> sptr) noexcept
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -159,6 +164,7 @@ public:
 
 	void reset()
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
@@ -173,6 +179,7 @@ public:
 	}
 	T* operator ->()
 	{
+		int retry = -1;
 		while (_XBEGIN_STARTED != _xbegin()){
             ++retry;
             if(retry > RETRY_THRESHOLD){
