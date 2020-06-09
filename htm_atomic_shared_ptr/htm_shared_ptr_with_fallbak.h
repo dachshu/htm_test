@@ -5,12 +5,15 @@
 
 using namespace std;
 
+#define RETRY_THRESHOLD 20
 
 template <class T>
 
 struct htm_shared_ptr {
 private:
 	shared_ptr<T> m_ptr;
+
+    mutable mutex m_lock;
 public:
 	bool is_lock_free() const noexcept
 	{
@@ -19,7 +22,16 @@ public:
 
 	void store(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+        int retry = -1;
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                // seq store
+                m_lock.lock();
+			    m_ptr = sptr;
+			    m_lock.unlock();
+            }
+        };
         shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
@@ -28,7 +40,16 @@ public:
 
 	shared_ptr<T> load(memory_order = memory_order_seq_cst) const noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		int retry = -1;
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    shared_ptr<T> t = m_ptr;
+			    m_lock.unlock();
+			    return t;
+            }
+        };
 		shared_ptr<T> t = m_ptr;
 		_xend();
 		return t;
@@ -36,7 +57,15 @@ public:
 
 	operator shared_ptr<T>() const noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    shared_ptr<T> t = m_ptr;
+			    m_lock.unlock();
+			    return t;
+            }
+        };
 		shared_ptr<T> t = m_ptr;
 		_xend();
 		return t;
@@ -44,7 +73,16 @@ public:
 
 	shared_ptr<T> exchange(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    shared_ptr<T> t = m_ptr;
+			    m_ptr = sptr;
+			    m_lock.unlock();
+			    return t;
+            }
+        };
 		shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
@@ -54,7 +92,21 @@ public:
 	bool compare_exchange_strong(shared_ptr<T>& expected_sptr, shared_ptr<T> new_sptr, memory_order, memory_order) noexcept
 	{
 		bool success = false;
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                success = false;
+			    m_lock.lock();
+			    shared_ptr<T> t = m_ptr;
+			    if (m_pt.get() == expected_sptr.get()) {
+				    m_ptr = new_sptr;
+				    success = true;
+			    }
+			    expected_sptr = m_ptr;
+			    m_lock.unlock();
+                return success;
+            }
+        };
 		shared_ptr<T> t = m_ptr;
 		if (m_ptr.get() == expected_sptr.get()) {
 			m_ptr = new_sptr;
@@ -75,7 +127,14 @@ public:
 
 	constexpr htm_shared_ptr(shared_ptr<T> sptr) noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    m_ptr = sptr;
+			    m_lock.unlock();
+            }
+        };
 		m_ptr = sptr;
 		_xend();
 	}
@@ -83,7 +142,15 @@ public:
 	//		htm_shared_ptr& operator=(const htm_shared_ptr&) = delete;
 	shared_ptr<T> operator=(shared_ptr<T> sptr) noexcept
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    m_ptr = sptr;
+			    m_lock.unlock();
+			    return sptr;
+            }
+        };
         shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
 		_xend();
@@ -92,13 +159,29 @@ public:
 
 	void reset()
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    m_ptr = nullptr;
+			    m_lock.unlock();
+            }
+        };
+        shared_ptr<T> t = m_ptr;
 		m_ptr = nullptr;
 		_xend();
 	}
 	T* operator ->()
 	{
-		while (_XBEGIN_STARTED != _xbegin());
+		while (_XBEGIN_STARTED != _xbegin()){
+            ++retry;
+            if(retry > RETRY_THRESHOLD){
+                m_lock.lock();
+			    T* p = m_ptr.get();
+			    m_lock.unlock();
+			    return p;
+            }
+        };
 		T* p = m_ptr.get();
 		_xend();
 		return p;
