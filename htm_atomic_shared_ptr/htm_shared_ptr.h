@@ -5,6 +5,13 @@
 
 using namespace std;
 
+thread_local unsigned int num_tx_aborts = 0;
+thread_local unsigned int num_tx_abort_capacity = 0;
+thread_local unsigned int num_tx_abort_confilct = 0;
+thread_local unsigned int num_tx_abort_forced = 0;
+thread_local unsigned int num_tx_abort_explicit = 0;
+thread_local unsigned int num_tx_abort_rest = 0;
+
 template <class T>
 
 struct htm_shared_ptr {
@@ -18,8 +25,29 @@ public:
 
 	void store(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
-        cout << "call store" << endl;
-		while (_XBEGIN_STARTED != _xbegin());
+		//while (_XBEGIN_STARTED != _xbegin());
+        while (true)
+        {
+            int status = 0;
+	
+            status = _xbegin();
+            if (_XBEGIN_STARTED == (unsigned)status) {
+                return break;
+            }
+            cout << "!";
+            ++num_tx_aborts;
+            if (status & _XABORT_CAPACITY) {
+                ++num_tx_abort_capacity;
+	        } else if (status & _XABORT_CONFLICT) {
+                ++num_tx_abort_confilct;
+            
+            } else if (status & _XABORT_EXPLICIT) {
+                ++num_tx_abort_explicit;
+	        } else {
+                ++num_tx_abort_rest;
+	        }
+        }
+        
 		m_ptr = sptr;
 		_xend();
 	}
@@ -27,7 +55,6 @@ public:
 
 	shared_ptr<T> load(memory_order = memory_order_seq_cst) const noexcept
 	{
-        cout << "call load" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		shared_ptr<T> t = m_ptr;
 		_xend();
@@ -36,7 +63,6 @@ public:
 
 	operator shared_ptr<T>() const noexcept
 	{
-         cout << "shared_ptr()" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		shared_ptr<T> t = m_ptr;
 		_xend();
@@ -45,7 +71,6 @@ public:
 
 	shared_ptr<T> exchange(shared_ptr<T> sptr, memory_order = memory_order_seq_cst) noexcept
 	{
-         cout << "exchange" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		shared_ptr<T> t = m_ptr;
 		m_ptr = sptr;
@@ -53,9 +78,8 @@ public:
 		return t;
 	}
 
-	bool compare_exchange_strong(shared_ptr<T>& expected_sptr, shared_ptr<T> new_sptr, memory_order mem_oreder) noexcept
+	bool compare_exchange_strong(shared_ptr<T>& expected_sptr, shared_ptr<T> new_sptr, memory_order, memory_order) noexcept
 	{
-         cout << "cas" << endl;
 		bool success = false;
 		while (_XBEGIN_STARTED != _xbegin());
 		shared_ptr<T> t = m_ptr;
@@ -71,15 +95,13 @@ public:
 
 	bool compare_exchange_weak(shared_ptr<T>& expected_sptr, shared_ptr<T> target_sptr, memory_order mem_order) noexcept
 	{
-        cout << "call cas weak" << endl;
 		return compare_exchange_strong(expected_sptr, target_sptr, mem_order);
 	}
 
 	htm_shared_ptr() noexcept = default;
 
 	constexpr htm_shared_ptr(shared_ptr<T> sptr) noexcept
-	{ 
-        cout << "call initializer" << endl;
+	{
 		while (_XBEGIN_STARTED != _xbegin());
 		m_ptr = sptr;
 		_xend();
@@ -88,7 +110,6 @@ public:
 	//		htm_shared_ptr& operator=(const htm_shared_ptr&) = delete;
 	shared_ptr<T> operator=(shared_ptr<T> sptr) noexcept
 	{
-        cout << "call op=" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		m_ptr = sptr;
 		_xend();
@@ -97,14 +118,12 @@ public:
 
 	void reset()
 	{
-        cout << "reset" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		m_ptr = nullptr;
 		_xend();
 	}
 	T* operator ->()
 	{
-        cout << "call op->" << endl;
 		while (_XBEGIN_STARTED != _xbegin());
 		T* p = m_ptr.get();
 		_xend();
@@ -115,19 +134,16 @@ public:
 
 	htm_shared_ptr(const htm_shared_ptr& rhs)
 	{
-        cout << "call initializer with hsp" << endl;
 		store(rhs);
 	}
 	htm_shared_ptr& operator=(const htm_shared_ptr& rhs)
 	{
-        cout << "call op = with hsp" << endl;
 		store(rhs);
 		return *this;
 	}
 	template< typename TargetType >
 	inline bool operator ==(shared_ptr< TargetType > const& rhs)
 	{
-        cout << "call op==" << endl;
 		return load() == rhs;
 	}
 };
