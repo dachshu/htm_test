@@ -122,7 +122,7 @@ public:
 	}
 };
 
-template <class T> struct atomic_weak_ptr {
+template <class T> struct htm_atomic_weak_ptr {
 private:
 	mutable mutex m_lock;
 	weak_ptr<T> m_ptr;
@@ -184,17 +184,17 @@ public:
 		return compare_exchange_strong(exptected_wptr, new_wptr, mem_order);
 	}
 
-	atomic_weak_ptr() noexcept = default;
+	htm_atomic_weak_ptr() noexcept = default;
 
-	constexpr atomic_weak_ptr(weak_ptr<T> wptr) noexcept
+	constexpr htm_atomic_weak_ptr(weak_ptr<T> wptr) noexcept
 	{
 		while (_XBEGIN_STARTED != _xbegin());
 		m_ptr = wptr;
 		_xend();
 	}
 
-	atomic_weak_ptr(const atomic_weak_ptr&) = delete;
-	atomic_weak_ptr& operator=(const atomic_weak_ptr&) = delete;
+	htm_atomic_weak_ptr(const htm_atomic_weak_ptr&) = delete;
+	htm_atomic_weak_ptr& operator=(const htm_atomic_weak_ptr&) = delete;
 	weak_ptr<T> operator=(weak_ptr<T> wptr) noexcept
 	{
 		while (_XBEGIN_STARTED != _xbegin());
