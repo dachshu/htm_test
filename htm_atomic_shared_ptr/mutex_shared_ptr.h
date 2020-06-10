@@ -159,13 +159,13 @@
 		bool compare_exchange_strong(weak_ptr<T>& expected_wptr, weak_ptr<T> new_wptr, memory_order mem_order) noexcept
 		{
 			bool success = false;
-			lock_guard<mutext> lg(m_lock);
+			lock_guard<mutet> lg(m_lock);
 
 			weak_ptr<T> t = m_ptr;
 			shared_ptr<T> my_ptr = t.lock();
 			if (!my_ptr) return false;
 			shared_ptr<T> expected_sptr = expected_wptr.lock();
-			if (!exptected_sptr) return false;
+			if (!expected_sptr) return false;
 
 			if (my_ptr.get() == expected_sptr.get()) {
 				success = true;
@@ -177,7 +177,7 @@
 
 		bool compare_exchange_weak(weak_ptr<T>& exptected_wptr, weak_ptr<T> new_wptr, memory_order mem_order) noexcept
 		{
-			return compare_exchange_strong(exptected_wptr, new_wptr, memory_order mem_order);
+			return compare_exchange_strong(exptected_wptr, new_wptr, mem_order);
 		}
 
 		atomic_weak_ptr() noexcept = default;
