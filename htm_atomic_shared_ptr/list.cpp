@@ -4,8 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <vector>
-#include "htm_shared_ptr.h"
-#include "mutex_shared_ptr.h"
+#include "htm_shared_ptr_with_fallback.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -1136,119 +1135,6 @@ public:
 	}
 };
 
-class HSPZLIST {
-	atomic_shared_ptr <SPNODE>  head, tail;
-public:
-	HSPZLIST()
-	{
-		head = make_shared<SPNODE>();
-		tail = make_shared<SPNODE>();
-		head->key = 0x80000000;
-		tail->key = 0x7FFFFFFF;
-		head->next = tail;
-	}
-	~HSPZLIST() {}
-
-	void Init()
-	{
-		head->next = tail;
-	}
-
-	void recycle_freelist()
-	{
-		return;
-	}
-
-	bool validate(shared_ptr<SPNODE>& pred, shared_ptr<SPNODE>& curr)
-	{
-		return (pred->removed == false) && (false == curr->removed) && (pred->next == curr);
-	}
-
-	bool Add(int key)
-	{
-		shared_ptr<SPNODE> pred, curr;
-
-		while (true) {
-			pred = head;
-			curr = pred->next;
-			while (curr->key < key) {
-				pred = curr; curr = curr->next;
-			}
-			pred->lock(); curr->lock();
-			if (false == validate(pred, curr)) {
-				pred->unlock();
-				curr->unlock();
-				continue;
-			}
-			if (key == curr->key) {
-				pred->unlock();
-				curr->unlock();
-				return false;
-			}
-			else {
-				shared_ptr<SPNODE> node = make_shared<SPNODE>(key);
-				node->next = curr;
-				pred->next = node;
-				pred->unlock();
-				curr->unlock();
-				return true;
-			}
-		}
-	}
-
-	bool Remove(int key)
-	{
-		shared_ptr<SPNODE> pred, curr;
-
-		while (true) {
-			pred = head;
-			curr = pred->next;
-			while (curr->key < key) {
-				pred = curr; curr = curr->next;
-			}
-			pred->lock(); curr->lock();
-			if (false == validate(pred, curr)) {
-				pred->unlock();
-				curr->unlock();
-				continue;
-			}
-			if (key == curr->key) {
-				pred->next = curr->next;
-				pred->unlock();
-				curr->unlock();
-				return true;
-			}
-			else {
-				pred->unlock();
-				curr->unlock();
-				return false;
-			}
-		}
-	}
-	bool Contains(int key)
-	{
-		shared_ptr <SPNODE> curr;
-		curr = head->next;
-		while (curr->key < key) {
-			curr = curr->next;
-		}
-		return (key == curr->key) && (false == curr->removed);
-	}
-
-	void display20()
-	{
-		int c = 20;
-		shared_ptr<SPNODE> p = head->next;
-		while (p->key != tail->key)
-		{
-			cout << p->key << ", ";
-			p = p->next;
-			c--;
-			if (c == 0) break;
-		}
-		cout << endl;
-	}
-};
 
 const auto NUM_TEST = 40000;
 const auto KEY_RANGE = 1000;
