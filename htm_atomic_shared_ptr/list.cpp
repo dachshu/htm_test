@@ -4,7 +4,8 @@
 #include <atomic>
 #include <mutex>
 #include <vector>
-#include "htm_shared_ptr_with_fallback.h"
+//#include "htm_shared_ptr_with_fallback.h"
+#include "fully_htm_shared_ptr.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -570,13 +571,129 @@ public:
 		n_lock.unlock();
 	}
 };
+// class SPZLIST {
+// 	htm_shared_ptr <SPNODE>  head, tail;
+// public:
+// 	SPZLIST()
+// 	{
+// 		head = make_shared<SPNODE>();
+// 		tail = make_shared<SPNODE>();
+// 		head->key = 0x80000000;
+// 		tail->key = 0x7FFFFFFF;
+// 		head->next = tail;
+// 	}
+// 	~SPZLIST() {}
+
+// 	void Init()
+// 	{
+// 		head->next = tail;
+// 	}
+
+// 	void recycle_freelist()
+// 	{
+// 		return;
+// 	}
+
+// 	bool validate(shared_ptr<SPNODE>& pred, shared_ptr<SPNODE>& curr)
+// 	{
+// 		return (pred->removed == false) && (false == curr->removed) && (pred->next == curr);
+// 	}
+
+// 	bool Add(int key)
+// 	{
+// 		shared_ptr<SPNODE> pred, curr;
+
+// 		while (true) {
+// 			pred = head;
+// 			curr = pred->next;
+// 			while (curr->key < key) {
+// 				pred = curr; curr = curr->next;
+// 			}
+// 			pred->lock(); curr->lock();
+// 			if (false == validate(pred, curr)) {
+// 				pred->unlock();
+// 				curr->unlock();
+// 				continue;
+// 			}
+// 			if (key == curr->key) {
+// 				pred->unlock();
+// 				curr->unlock();
+// 				return false;
+// 			}
+// 			else {
+// 				shared_ptr<SPNODE> node = make_shared<SPNODE>(key);
+// 				node->next = curr;
+// 				pred->next = node;
+// 				pred->unlock();
+// 				curr->unlock();
+// 				return true;
+// 			}
+// 		}
+// 	}
+
+// 	bool Remove(int key)
+// 	{
+// 		shared_ptr<SPNODE> pred, curr;
+
+// 		while (true) {
+// 			pred = head;
+// 			curr = pred->next;
+// 			while (curr->key < key) {
+// 				pred = curr; curr = curr->next;
+// 			}
+// 			pred->lock(); curr->lock();
+// 			if (false == validate(pred, curr)) {
+// 				pred->unlock();
+// 				curr->unlock();
+// 				continue;
+// 			}
+// 			if (key == curr->key) {
+// 				pred->next = curr->next;
+// 				pred->unlock();
+// 				curr->unlock();
+// 				return true;
+// 			}
+// 			else {
+// 				pred->unlock();
+// 				curr->unlock();
+// 				return false;
+// 			}
+// 		}
+// 	}
+// 	bool Contains(int key)
+// 	{
+// 		shared_ptr <SPNODE> curr;
+// 		curr = head->next;
+// 		while (curr->key < key) {
+// 			curr = curr->next;
+// 		}
+// 		return (key == curr->key) && (false == curr->removed);
+// 	}
+
+// 	void display20()
+// 	{
+// 		int c = 20;
+// 		shared_ptr<SPNODE> p = head->next;
+// 		while (p->key != tail->key)
+// 		{
+// 			cout << p->key << ", ";
+// 			p = p->next;
+// 			c--;
+// 			if (c == 0) break;
+// 		}
+// 		cout << endl;
+// 	}
+// };
+
 class SPZLIST {
+
 	htm_shared_ptr <SPNODE>  head, tail;
+
 public:
 	SPZLIST()
 	{
-		head = make_shared<SPNODE>();
-		tail = make_shared<SPNODE>();
+		head = make_htm_shared<SPNODE>();
+		tail = make_htm_shared<SPNODE>();
 		head->key = 0x80000000;
 		tail->key = 0x7FFFFFFF;
 		head->next = tail;
@@ -593,21 +710,32 @@ public:
 		return;
 	}
 
-	bool validate(shared_ptr<SPNODE>& pred, shared_ptr<SPNODE>& curr)
+	bool validate(htm_shared_ptr<SPNODE>& pred, htm_shared_ptr<SPNODE>& curr)
 	{
 		return (pred->removed == false) && (false == curr->removed) && (pred->next == curr);
 	}
 
 	bool Add(int key)
 	{
-		shared_ptr<SPNODE> pred, curr;
-
+		htm_shared_ptr<SPNODE> pred, curr;
 		while (true) {
+
+#if(true == SHARED_PTR_ZLIST)
+			pred = atomic_load(&head);
+			curr = atomic_load(&pred->next);
+			while (curr->key < key) {
+				pred = atomic_load(&curr);
+				curr = atomic_load(&curr->next);
+			}
+#else
 			pred = head;
 			curr = pred->next;
 			while (curr->key < key) {
-				pred = curr; curr = curr->next;
+				pred = curr;
+				curr = curr->next;
 			}
+#endif
+
 			pred->lock(); curr->lock();
 			if (false == validate(pred, curr)) {
 				pred->unlock();
@@ -620,9 +748,12 @@ public:
 				return false;
 			}
 			else {
-				shared_ptr<SPNODE> node = make_shared<SPNODE>(key);
+				htm_shared_ptr<SPNODE> node = make_htm_shared<SPNODE>(key);
+
+
 				node->next = curr;
 				pred->next = node;
+
 				pred->unlock();
 				curr->unlock();
 				return true;
@@ -632,13 +763,14 @@ public:
 
 	bool Remove(int key)
 	{
-		shared_ptr<SPNODE> pred, curr;
+		htm_shared_ptr<SPNODE> pred, curr;
 
 		while (true) {
 			pred = head;
 			curr = pred->next;
 			while (curr->key < key) {
-				pred = curr; curr = curr->next;
+				pred = curr;
+				curr = curr->next;
 			}
 			pred->lock(); curr->lock();
 			if (false == validate(pred, curr)) {
@@ -661,9 +793,10 @@ public:
 	}
 	bool Contains(int key)
 	{
-		shared_ptr <SPNODE> curr;
+		htm_shared_ptr <SPNODE> curr;
 		curr = head->next;
 		while (curr->key < key) {
+			auto& temp = curr;
 			curr = curr->next;
 		}
 		return (key == curr->key) && (false == curr->removed);
@@ -672,7 +805,7 @@ public:
 	void display20()
 	{
 		int c = 20;
-		shared_ptr<SPNODE> p = head->next;
+		htm_shared_ptr<SPNODE> p = head->next;
 		while (p->key != tail->key)
 		{
 			cout << p->key << ", ";
@@ -683,6 +816,7 @@ public:
 		cout << endl;
 	}
 };
+
 
 class LFNODE;
 class MPTR
@@ -1158,12 +1292,29 @@ void ThreadFunc(int num_thread)
 			exit(-1);
 		}
 	}
+
+	g_num_tx_aborts.fetch_add(num_tx_aborts);
+    g_num_tx_abort_capacity.fetch_add(num_tx_abort_capacity);
+    g_num_tx_abort_confilct.fetch_add(num_tx_abort_confilct);
+    g_num_tx_abort_forced.fetch_add(num_tx_abort_forced);
+    g_num_tx_abort_explicit.fetch_add(num_tx_abort_explicit);
+    g_num_tx_abort_rest.fetch_add(num_tx_abort_rest);
+    g_num_tx_commits.fetch_add(num_tx_commits);
 }
 
 int main()
 {
 	for (auto n = 1; n <= 16; n *= 2) {
 		list.Init();
+		g_num_tx_aborts.store(0);
+        g_num_tx_abort_capacity.store(0);
+        g_num_tx_abort_confilct.store(0);
+        g_num_tx_abort_forced.store(0);
+        g_num_tx_abort_explicit.store(0);
+        g_num_tx_abort_rest.store(0);
+
+        g_num_tx_commits.store(0);
+
 		vector <thread> threads;
 		auto s = high_resolution_clock::now();
 		for (int i = 0; i < n; ++i)
@@ -1174,6 +1325,14 @@ int main()
 		//list.recycle_freelist();
 		cout << n << "Threads,  ";
 		cout << ",  Duration : " << duration_cast<milliseconds>(d).count() << " msecs.\n";
+		
+		cout << "total aborts: " << g_num_tx_aborts << endl;
+        cout << "capacity aborts: " << g_num_tx_abort_capacity << endl;
+        cout << "conflict aborts: " << g_num_tx_abort_confilct << endl;
+        cout << "forced aborts: " << g_num_tx_abort_forced << endl;
+        cout << "explicit aborts: " << g_num_tx_abort_explicit << endl;
+        cout << "rest aborts: " << g_num_tx_abort_rest << endl;
+        cout << "total commits: " << g_num_tx_commits << endl;
 	}
 }
 
