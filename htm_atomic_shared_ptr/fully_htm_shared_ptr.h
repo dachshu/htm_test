@@ -1,6 +1,7 @@
 #pragma once
 #include <mutex>
 #include <memory>
+#include <atomic>
 #include <immintrin.h>
 
 using namespace std;
@@ -12,7 +13,10 @@ atomic<int> g_num_tx_abort_forced{ 0 };
 atomic<int> g_num_tx_abort_explicit{ 0 };
 atomic<int> g_num_tx_abort_rest{ 0 };
 
+atomic<int> g_num_fallback{ 0 };
+
 atomic<int> g_num_tx_commits{ 0 };
+
 
 
 thread_local unsigned int num_tx_aborts = 0;
@@ -22,19 +26,31 @@ thread_local unsigned int num_tx_abort_forced = 0;
 thread_local unsigned int num_tx_abort_explicit = 0;
 thread_local unsigned int num_tx_abort_rest = 0;
 
+thread_local unsigned int num_fallback = 0;
+
 thread_local unsigned int num_tx_commits = 0;
 
+thread_local int num_retry = 0;
 #define FORCED_ABORT -10
+#define MAX_RETRIES	10
 
-int tx_start()
+int tx_start(mutex &lock, atomic_bool &is_locked)
 {
-	int status = 0;
-	
-    status = _xbegin();
+	if(num_retry++ >= MAX_RETRIES) {
+		lock.lock();
+		is_locked.store(true);
+		++num_fallback;
+		return _XBEGIN_STARTED;
+	}
+
+	while(is_locked.load() == true);
+    int status = _xbegin();
     if (_XBEGIN_STARTED == (unsigned)status) {
         return status;
     }
-    ++num_tx_aborts;
+	if(is_locked.load() == true) _xabort(99);
+    
+	++num_tx_aborts;
     if (status & _XABORT_CAPACITY) {
         ++num_tx_abort_capacity;
 	} else if (status & _XABORT_CONFLICT) {
@@ -51,11 +67,15 @@ int tx_start()
     return status;
 }
 
-int tx_end()
+int tx_end(mutex &lock, atomic_bool &is_locked)
 {
-    _xend();
-    ++num_tx_commits;
-    return 0;
+	if(_xtest() == 1){
+		_xend();
+    	++num_tx_commits;
+    	return 0;
+	}
+	is_locked.store(false);
+    lock.unlock();
 }
 
 template <class T>
@@ -75,6 +95,9 @@ private:
 
 	ctr_block<T>	*m_b_ptr;
 	T* m_ptr;
+
+	mutex lock;
+	atomic_bool is_locked{false};
 public:
 	bool is_lock_free() const noexcept
 	{
@@ -86,7 +109,7 @@ public:
 		bool need_delete = false;
 		T* temp_ptr = nullptr;
 		T* temp_b_ptr = nullptr;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (nullptr != m_b_ptr) {
 			if (m_b_ptr->ref_count == 1) {
 				need_delete = true;
@@ -100,7 +123,7 @@ public:
 		}
 		m_ptr = sptr->m_ptr;
 		m_b_ptr = sptr->m_b_ptr;
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
@@ -109,30 +132,30 @@ public:
 
 	htm_shared_ptr<T> load(memory_order mem_order= memory_order_seq_cst) const noexcept
 	{
-		//while (_XBEGIN_STARTED != tx_start());
+		//while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		htm_shared_ptr<T> t{ *this };
-		//tx_end();
+		//tx_end(lock, is_locked);
 		return t;
 	}
 
 	//operator htm_shared_ptr<T>() const noexcept
 	//{
-	//	while (_XBEGIN_STARTED != tx_start());
+	//	while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 	//	htm_shared_ptr<T> t {*this};
-	//	tx_end();
+	//	tx_end(lock, is_locked);
 	//	return t;
 	//}
 
 	htm_shared_ptr<T> exchange(htm_shared_ptr<T> &sptr, memory_order mem_order= memory_order_seq_cst) noexcept
 	{
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		ctr_block<T>* t_b = m_b_ptr;
 		T* t_p = m_ptr;
 		m_b_ptr = sptr.m_b_ptr;
 		m_ptr = sptr.m_ptr;
 		sptr.m_b_ptr = t_b;
         sptr.m_ptr = t_p;
-		tx_end();
+		tx_end(lock, is_locked);
 		return sptr;
 	}
 
@@ -142,7 +165,7 @@ public:
 		bool need_delete = false;
 		T* temp_ptr;
 		ctr_block<T>* temp_b_ptr;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (m_b_ptr == expected_sptr.m_b_ptr) {
 			if (nullptr != m_b_ptr) {
 				if (m_b_ptr->ref_count == 1) {
@@ -159,7 +182,7 @@ public:
 			success = true;
 		}
 		expected_sptr = m_ptr;
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
@@ -183,7 +206,7 @@ public:
 		bool need_delete = false;
 		T *temp_ptr = nullptr;
 		ctr_block<T> *temp_b_ptr = nullptr;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (nullptr != m_b_ptr) {
 			if (m_b_ptr->ref_cnt == 1) {
 				need_delete = true;
@@ -192,7 +215,7 @@ public:
 			}
 			m_b_ptr->ref_cnt--;
 		}
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
@@ -201,12 +224,12 @@ public:
 
 	constexpr htm_shared_ptr(const htm_shared_ptr<T>& sptr) noexcept
 	{
-		while(_XBEGIN_STARTED != tx_start());
+		while(_XBEGIN_STARTED != tx_start(lock, is_locked));
 		m_ptr = sptr.m_ptr;
 		m_b_ptr = sptr.m_b_ptr;
 		if (nullptr != m_b_ptr) 
 			m_b_ptr->ref_cnt++;
-		tx_end();
+		tx_end(lock, is_locked);
 	}
 	//		htm_shared_ptr(const htm_shared_ptr&) = delete;
 	//		htm_shared_ptr& operator=(const htm_shared_ptr&) = delete;
@@ -216,7 +239,7 @@ public:
 		T* temp_ptr;
 		ctr_block<T>* temp_b_ptr;
 		do {
-			int t = tx_start();
+			int t = tx_start(lock, is_locked);
 			if (_XBEGIN_STARTED == t) break;
 			if (99 == t) {
 				m_ptr = nullptr;
@@ -237,7 +260,7 @@ public:
 		m_ptr = sptr.m_ptr;
 		m_b_ptr = sptr.m_b_ptr;
 		m_b_ptr->ref_cnt++;
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
@@ -255,10 +278,10 @@ public:
 	T operator*() noexcept
 	{
 		T temp_ptr;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (0 < m_b_ptr->ref_cnt)
 			temp_ptr = *m_ptr;
-		tx_end();
+		tx_end(lock, is_locked);
 		return temp_ptr;
 	}
 
@@ -267,7 +290,7 @@ public:
 		bool need_delete = false;
 		T* temp_ptr;
 		ctr_block<T>* temp_b_ptr;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (nullptr != m_b_ptr) {
 			if (m_b_ptr->ref_cnt == 1) {
 				need_delete = true;
@@ -279,7 +302,7 @@ public:
 		}
 		m_ptr = nullptr;
 		m_b_ptr = nullptr;
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
@@ -289,11 +312,11 @@ public:
 	{
 		T* p = nullptr;
 		bool exception = false;
-		while (_XBEGIN_STARTED != tx_start());
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
 		if (nullptr == m_b_ptr) exception = true;
 		else if (m_b_ptr->ref_cnt < 1) exception = true;
 		else p = m_ptr;
-		tx_end();
+		tx_end(lock, is_locked);
 		if (true == exception) {
             throw 99;
 			//int* a = nullptr;

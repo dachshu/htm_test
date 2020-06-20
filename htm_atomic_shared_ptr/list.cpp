@@ -1300,6 +1300,7 @@ void ThreadFunc(int num_thread)
     g_num_tx_abort_explicit.fetch_add(num_tx_abort_explicit);
     g_num_tx_abort_rest.fetch_add(num_tx_abort_rest);
     g_num_tx_commits.fetch_add(num_tx_commits);
+	g_num_fallback.fetch_add(num_fallback);
 }
 
 int main()
@@ -1312,6 +1313,7 @@ int main()
         g_num_tx_abort_forced.store(0);
         g_num_tx_abort_explicit.store(0);
         g_num_tx_abort_rest.store(0);
+		g_num_fallback.store(0);
 
         g_num_tx_commits.store(0);
 
@@ -1333,6 +1335,7 @@ int main()
         cout << "explicit aborts: " << g_num_tx_abort_explicit << endl;
         cout << "rest aborts: " << g_num_tx_abort_rest << endl;
         cout << "total commits: " << g_num_tx_commits << endl;
+		cout << "total fallbacks: " << g_num_fallback << endl;
 	}
 }
 
