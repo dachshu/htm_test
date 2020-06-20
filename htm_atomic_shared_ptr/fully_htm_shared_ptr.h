@@ -69,6 +69,7 @@ int tx_start(mutex &lock, atomic_bool &is_locked)
 
 int tx_end(mutex &lock, atomic_bool &is_locked)
 {
+	num_retry = 0;
 	if(_xtest() == 1){
 		_xend();
     	++num_tx_commits;
@@ -76,6 +77,7 @@ int tx_end(mutex &lock, atomic_bool &is_locked)
 	}
 	is_locked.store(false);
     lock.unlock();
+	return 0;
 }
 
 template <class T>
