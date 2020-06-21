@@ -99,8 +99,8 @@ private:
 	ctr_block<T>	*m_b_ptr;
 	T* m_ptr;
 
-	mutex lock;
-	atomic_bool is_locked{false};
+	mutable mutex lock;
+	mutable atomic_bool is_locked{false};
 public:
 	bool is_lock_free() const noexcept
 	{
@@ -136,7 +136,7 @@ public:
 		}
 	}
 
-	constexpr htm_shared_ptr(const htm_shared_ptr<T>& sptr) noexcept
+	htm_shared_ptr(const htm_shared_ptr<T>& sptr) noexcept
 	{
 		while(_XBEGIN_STARTED != tx_start(sptr.lock, sptr.is_locked));
 		m_ptr = sptr.m_ptr;
@@ -183,6 +183,36 @@ public:
 		}
 		return *this;
 	
+	}
+
+	void reset()
+	{
+		bool need_delete = false;
+		T* temp_ptr;
+		ctr_block<T>* temp_b_ptr;
+		while (_XBEGIN_STARTED != tx_start(lock, is_locked));
+		if (nullptr != m_b_ptr) {
+			if (m_b_ptr->ref_cnt.load() == 1) {
+				need_delete = true;
+				temp_ptr = m_ptr;
+				temp_b_ptr = m_b_ptr;
+			}
+			// else if (m_b_ptr->ref_cnt < 1) _xabort();
+			m_b_ptr->ref_cnt.fetch_sub(1);
+		}
+		m_ptr = nullptr;
+		m_b_ptr = nullptr;
+		tx_end(lock, is_locked);
+		if (true == need_delete) {
+			delete temp_ptr;
+			delete temp_b_ptr;
+		}
+	}
+
+	htm_shared_ptr<T> operator=(nullptr_t t) noexcept
+	{
+		reset();
+		return *this;
 	}
 
 
