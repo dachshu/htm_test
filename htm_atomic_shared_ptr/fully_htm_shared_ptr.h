@@ -153,7 +153,7 @@ public:
 		T* temp_ptr;
 		ctr_block<T>* temp_b_ptr;
 		do {
-			int t = tx_start(lock, is_locked);
+			int t = tx_start(sptr.lock, sptr.is_locked);
 			if (_XBEGIN_STARTED == t) break;
 			if (99 == t) {
 				m_ptr = nullptr;
@@ -162,21 +162,52 @@ public:
 			}
 		} while (true);
 		
-
-		if (nullptr != m_b_ptr) {
-		if (m_b_ptr->ref_cnt.load() == 1) {
-			need_delete = true;
-			temp_ptr = m_ptr;
-			temp_b_ptr = m_b_ptr;
+		// htm transaction
+		if(num_retry <= MAX_RETRIES){
+			if (nullptr != m_b_ptr) {
+				if (m_b_ptr->ref_cnt.load() == 1) {
+					need_delete = true;
+					temp_ptr = m_ptr;
+					temp_b_ptr = m_b_ptr;
+				}
+				else if (m_b_ptr->ref_cnt.load() < 1) _xabort(99);
+				m_b_ptr->ref_cnt.fetch_sub(1);
+			}
+			m_ptr = sptr.m_ptr;
+			m_b_ptr = sptr.m_b_ptr;
+			m_b_ptr->ref_cnt.fetch_add(1);
+			tx_end(sptr.lock, sptr.is_locked);
 		}
-		else if (m_b_ptr->ref_cnt.load() < 1) _xabort(99);
-		m_b_ptr->ref_cnt.fetch_sub(1);
-		}
-		m_ptr = sptr.m_ptr;
-		m_b_ptr = sptr.m_b_ptr;
-		m_b_ptr->ref_cnt.fetch_add(1);
-		tx_end(lock, is_locked);
+		// fallback path
+		else{
+			T* s_ptr = sptr.m_ptr;
+			ctr_block<T>* s_b_ptr = sptr.m_b_ptr;
+			s_b_ptr->ref_cnt.fetch_add(1);
+			tx_end(sptr.lock, sptr.is_locked);
 
+			lock.lock();
+			is_locked.store(true);
+			if (nullptr != m_b_ptr) {
+				if (m_b_ptr->ref_cnt.load() == 1) {
+					need_delete = true;
+					temp_ptr = m_ptr;
+					temp_b_ptr = m_b_ptr;
+				}
+				else if (m_b_ptr->ref_cnt.load() < 1){
+					m_ptr = nullptr;
+					m_b_ptr = nullptr;
+					is_locked.store(false);
+   					lock.unlock();
+					return *this;
+				}
+				m_b_ptr->ref_cnt.fetch_sub(1);
+			}
+			m_ptr = s_ptr;
+			m_b_ptr = s_b_ptr;
+			
+			is_locked.store(false);
+   			lock.unlock();
+		}
 		if (true == need_delete) {
 			delete temp_ptr;
 			delete temp_b_ptr;
